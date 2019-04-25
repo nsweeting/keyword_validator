@@ -172,11 +172,15 @@ defmodule KeywordValidator do
   defp maybe_validate_key({key, opts}, {parsed, keyword, invalid}) do
     opts = @default_opts |> Keyword.merge(opts) |> Enum.into(%{})
 
-    if opts.required || Keyword.has_key?(keyword, key) do
+    if validate_key?(keyword, key, opts) do
       validate_key({key, opts}, {parsed, keyword, invalid})
     else
       {parsed, keyword, invalid}
     end
+  end
+
+  defp validate_key?(keyword, key, opts) do
+    Keyword.has_key?(keyword, key) || opts.required || opts.default
   end
 
   defp validate_key({key, opts}, {parsed, keyword, invalid}) do
