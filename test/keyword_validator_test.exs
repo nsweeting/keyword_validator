@@ -130,6 +130,21 @@ defmodule KeywordValidatorTest do
       assert_has_error(invalid, :baz, "must be a list")
     end
 
+    test "will return errors for list and list value typed keys" do
+      keyword = [foo: ["foo", "foo"], bar: [0, 1], baz: ["baz", :baz]]
+
+      schema = %{
+        foo: [type: {:list, :binary}],
+        bar: [type: {:list, :atom}],
+        baz: [type: {:list, :integer}]
+      }
+
+      assert {:error, invalid} = KeywordValidator.validate(keyword, schema)
+      assert_no_error(invalid, :foo)
+      assert_has_error(invalid, :bar, "must be a list of type :atom")
+      assert_has_error(invalid, :baz, "must be a list of type :integer")
+    end
+
     test "will return errors for map typed keys" do
       keyword = [foo: %{}, bar: 0, baz: :baz]
       schema = %{foo: [type: :map], bar: [type: :map], baz: [type: :map]}
