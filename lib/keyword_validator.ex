@@ -242,7 +242,6 @@ defmodule KeywordValidator do
   defp validate_type(:integer, _val), do: "must be an integer"
 
   defp validate_type(:list, val) when is_list(val), do: true
-  defp validate_type(:list, _val), do: "must be a list"
 
   defp validate_type({:list, type}, val) when is_list(val) do
     if Enum.all?(val, fn item -> validate_type(type, item) == true end) do
@@ -251,6 +250,8 @@ defmodule KeywordValidator do
       "must be a list of type #{inspect(type)}"
     end
   end
+
+  defp validate_type(:list, _val), do: "must be a list"
 
   defp validate_type(:map, val) when is_map(val), do: true
   defp validate_type(:map, _val), do: "must be a map"
