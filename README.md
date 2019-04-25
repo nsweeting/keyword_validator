@@ -43,7 +43,7 @@ associated errors is returned.
 ```elixir
 iex> keyword = [foo: :foo, bar: :bar]
 iex> schema = %{foo: [type: :binary], bar: [inclusion: [:one, :two, :three]]}
-iex> KeywordValidator.validate!(keyword, schema)
+iex> KeywordValidator.validate(keyword, schema)
 {:error, [bar: ["must be one of: [:one, :two, :three]"], foo: ["must be a binary"]]}
 ```
 
@@ -54,11 +54,13 @@ an error that describes the invalid key entries.
 ** (ArgumentError) Invalid keyword given.
 
 Keyword:
-    [foo: :foo, bar: :bar]
+
+[foo: :foo, bar: :bar]
 
 Invalid:
-    bar: ["must be one of: [:one, :two, :three]"]
-    foo: ["must be a binary"]
+
+bar: ["must be one of: [:one, :two, :three]"]
+foo: ["must be a binary"]
 ```
 
 To view all the available validation options, please check out the [relevant documentation](https://hexdocs.pm/keyword_validator/KeywordValidator.html#validate/2).

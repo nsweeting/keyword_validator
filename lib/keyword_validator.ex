@@ -23,7 +23,7 @@ defmodule KeywordValidator do
           | :boolean
           | :float
           | :function
-          | {:function, non_neg_integer()}
+          | {:function, arity :: non_neg_integer()}
           | :integer
           | :list
           | :map
@@ -33,7 +33,7 @@ defmodule KeywordValidator do
           | :struct
           | {:struct, module()}
           | :tuple
-          | {:tuple, non_neg_integer()}
+          | {:tuple, size :: non_neg_integer()}
   @type key_opt ::
           {:default, any()}
           | {:required, boolean()}
@@ -115,10 +115,12 @@ defmodule KeywordValidator do
       ** (ArgumentError) Invalid keyword given.
 
       Keyword:
-          [foo: :foo]
+
+      [foo: :foo]
 
       Invalid:
-          foo: ["must be one of: [:one, :two]"]
+
+      foo: ["must be one of: [:one, :two]"]
 
   """
   @spec validate!(keyword(), schema()) :: any()
@@ -132,25 +134,24 @@ defmodule KeywordValidator do
         Invalid keyword given.
 
         Keyword:
-            #{inspect(keyword, pretty: true)}
+
+        #{inspect(keyword, pretty: true)}
 
         Invalid:
+
         #{format_invalid(invalid)}
         """
     end
   end
 
-  defp validate_extra_keys({parsed, keyword, invalid}, schema) do
-    invalid =
-      Enum.reduce(keyword, invalid, fn {key, _val}, invalid ->
-        if Map.has_key?(schema, key) do
-          invalid
-        else
-          put_error(invalid, key, "is not a valid key")
-        end
-      end)
-
-    {parsed, keyword, invalid}
+  defp validate_extra_keys({_parsed, keyword, _invalid} = results, schema) do
+    Enum.reduce(keyword, results, fn {key, _val}, {parsed, keyword, invalid} ->
+      if Map.has_key?(schema, key) do
+        {parsed, keyword, invalid}
+      else
+        {parsed, keyword, put_error(invalid, key, "is not a valid key")}
+      end
+    end)
   end
 
   defp put_error(invalid, key, msg) when is_binary(msg) do
@@ -170,14 +171,10 @@ defmodule KeywordValidator do
   defp maybe_validate_key({key, opts}, {parsed, keyword, invalid}) do
     opts = @default_opts |> Keyword.merge(opts) |> Enum.into(%{})
 
-    if Keyword.has_key?(keyword, key) do
+    if opts.required || Keyword.has_key?(keyword, key) do
       validate_key({key, opts}, {parsed, keyword, invalid})
     else
-      if opts.required do
-        validate_key({key, opts}, {parsed, keyword, invalid})
-      else
-        {parsed, keyword, invalid}
-      end
+      {parsed, keyword, invalid}
     end
   end
 
@@ -191,10 +188,9 @@ defmodule KeywordValidator do
     |> validate_inclusion()
     |> validate_exclusion()
     |> validate_custom()
-    |> elem(3)
     |> case do
-      [] -> {Keyword.put(parsed, key, val), keyword, invalid}
-      errors -> {parsed, keyword, put_error(invalid, key, errors)}
+      {_, _, _, []} -> {Keyword.put(parsed, key, val), keyword, invalid}
+      {_, _, _, errors} -> {parsed, keyword, put_error(invalid, key, errors)}
     end
   end
 
@@ -326,7 +322,7 @@ defmodule KeywordValidator do
   defp format_invalid(invalid) do
     invalid
     |> Enum.reduce("", fn {key, errors}, final ->
-      final <> "    #{key}: #{inspect(errors, pretty: true)}\n"
+      final <> "#{key}: #{inspect(errors, pretty: true)}\n"
     end)
     |> String.trim_trailing("\n")
   end
