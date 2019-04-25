@@ -28,6 +28,7 @@ defmodule KeywordValidator do
           | :list
           | {:list, val_type()}
           | :map
+          | {:map, [keys :: atom() | String.t()]}
           | :number
           | :pid
           | :port
@@ -35,6 +36,7 @@ defmodule KeywordValidator do
           | {:struct, module()}
           | :tuple
           | {:tuple, size :: non_neg_integer()}
+          | {:tuple, tuple_val_types :: tuple()}
   @type key_opt ::
           {:default, any()}
           | {:required, boolean()}
@@ -269,8 +271,29 @@ defmodule KeywordValidator do
 
   defp validate_type(:tuple, val) when is_tuple(val), do: true
   defp validate_type(:tuple, _val), do: "must be a tuple"
-  defp validate_type({:tuple, size}, val) when is_tuple(val) and tuple_size(val) == size, do: true
-  defp validate_type({:tuple, size}, _val), do: "must be a tuple of size #{size}"
+
+  defp validate_type({:tuple, size}, val)
+       when is_tuple(val) and is_integer(size) and tuple_size(val) == size,
+       do: true
+
+  defp validate_type({:tuple, size}, _val) when is_integer(size),
+    do: "must be a tuple of size #{size}"
+
+  defp validate_type({:tuple, type}, val)
+       when is_tuple(type) and is_tuple(val) and tuple_size(type) == tuple_size(val) do
+    type_list = Tuple.to_list(type)
+    val_list = Tuple.to_list(val)
+    validations = Enum.zip(type_list, val_list)
+
+    if Enum.any?(validations, fn {type, val} -> validate_type(type, val) == true end) do
+      true
+    else
+      "must be a tuple with the structure: #{inspect(type)}"
+    end
+  end
+
+  defp validate_type({:tuple, type}, _val),
+    do: "must be a tuple with the structure: #{inspect(type)}"
 
   defp validate_type(types, val) when is_list(types) do
     if Enum.any?(types, fn type -> validate_type(type, val) == true end) do

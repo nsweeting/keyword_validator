@@ -247,6 +247,21 @@ defmodule KeywordValidatorTest do
       assert_has_error(invalid, :baz, "must be a tuple of size 1")
     end
 
+    test "will return errors for tuple structure typed keys" do
+      keyword = [foo: {:foo, 1}, bar: {}, baz: {"baz", :baz}]
+
+      schema = %{
+        foo: [type: {:tuple, {:atom, :integer}}],
+        bar: [type: {:tuple, {:atom}}],
+        baz: [type: {:tuple, {:atom, :binary}}]
+      }
+
+      assert {:error, invalid} = KeywordValidator.validate(keyword, schema)
+      assert_no_error(invalid, :foo)
+      assert_has_error(invalid, :bar, "must be a tuple with the structure: {:atom}")
+      assert_has_error(invalid, :baz, "must be a tuple with the structure: {:atom, :binary}")
+    end
+
     test "will return errors for multiple types" do
       keyword = [foo: :foo, bar: 0, baz: :baz]
 
