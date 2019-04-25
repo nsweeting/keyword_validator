@@ -25,10 +25,10 @@ defmodule KeywordValidator do
           | :function
           | {:function, arity :: non_neg_integer()}
           | :integer
+          | {:keyword, schema()}
           | :list
           | {:list, val_type()}
           | :map
-          | {:map, [keys :: atom() | String.t()]}
           | :number
           | :pid
           | :port
@@ -80,7 +80,7 @@ defmodule KeywordValidator do
        the function will be given the key and value as arguments, and must return
        a list of string errors (or an empty list if no errors are present)
 
-  ## Example
+  ## Examples
 
       iex> KeywordValidator.validate([foo: :foo], %{foo: [type: :atom, required: true]})
       {:ok, [foo: :foo]}
@@ -91,8 +91,17 @@ defmodule KeywordValidator do
       iex> KeywordValidator.validate([foo: :foo], %{foo: [inclusion: [:one, :two]]})
       {:error, [foo: ["must be one of: [:one, :two]"]]}
 
+      iex> KeywordValidator.validate([foo: {:foo, 1}], %{foo: [type: {:tuple, {:atom, :integer}}]})
+      {:ok, [foo: {:foo, 1}]}
+
+      iex> KeywordValidator.validate([foo: ["one", 2]], %{foo: [type: {:list, :binary}]})
+      {:error, [foo: ["must be a list of type :binary"]]}
+
       iex> KeywordValidator.validate([foo: "foo"], %{foo: [format: ~r/foo/]})
       {:ok, [foo: "foo"]}
+
+      iex> KeywordValidator.validate([foo: %Foo{}], %{foo: [type: {:struct, Bar}]})
+      {:error, [foo: ["must be a struct of type Bar"]]}
 
       iex> KeywordValidator.validate([foo: "foo"], %{foo: [custom: [fn key, val -> ["some error"] end]]})
       {:error, [foo: ["some error"]]}
@@ -241,6 +250,17 @@ defmodule KeywordValidator do
   defp validate_type(:integer, val) when is_integer(val), do: true
   defp validate_type(:integer, _val), do: "must be an integer"
 
+  defp validate_type({:keyword, schema}, val) when is_list(val) do
+    case validate(val, schema) do
+      {:ok, _} -> true
+      {:error, _errors} -> "must be a keyword with structure: #{schema_string(schema)}"
+    end
+  end
+
+  defp validate_type({:keyword, schema}, _val) do
+    "must be a keyword with structure: #{schema_string(schema)}"
+  end
+
   defp validate_type(:list, val) when is_list(val), do: true
   defp validate_type(:list, _val), do: "must be a list"
 
@@ -363,5 +383,14 @@ defmodule KeywordValidator do
       final <> "#{key}: #{inspect(errors, pretty: true)}\n"
     end)
     |> String.trim_trailing("\n")
+  end
+
+  defp schema_string(schema) do
+    schema =
+      schema
+      |> Enum.map(fn {k, v} -> "#{k}: #{inspect(v)}" end)
+      |> Enum.join(", ")
+
+    "[#{schema}]"
   end
 end
