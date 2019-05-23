@@ -334,6 +334,31 @@ defmodule KeywordValidatorTest do
       assert_has_error(invalid, :bar, "custom error")
       assert_has_error(invalid, :baz, "custom error")
     end
+
+    test "will return errors for custom module functions" do
+      defmodule Validator do
+        def run(:foo, _val) do
+          []
+        end
+
+        def run(_, _) do
+          ["custom error"]
+        end
+      end
+
+      keyword = [foo: "foo", bar: "bar", baz: "baz"]
+
+      schema = %{
+        foo: [custom: [{Validator, :run}]],
+        bar: [custom: [{Validator, :run}]],
+        baz: [custom: [{Validator, :run}]]
+      }
+
+      assert {:error, invalid} = KeywordValidator.validate(keyword, schema)
+      assert_no_error(invalid, :foo)
+      assert_has_error(invalid, :bar, "custom error")
+      assert_has_error(invalid, :baz, "custom error")
+    end
   end
 
   describe "validate!/2" do
