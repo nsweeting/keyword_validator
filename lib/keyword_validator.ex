@@ -76,9 +76,9 @@ defmodule KeywordValidator do
     * `:format` - a regex used to validate string format
     * `:inclusion` - a list of items that the value must be a included in
     * `:exclusion` - a list of items that the value must not be included in
-    * `:custom` - a list of two-arity functions that serve as custom validators.
-       the function will be given the key and value as arguments, and must return
-       a list of string errors (or an empty list if no errors are present)
+    * `:custom` - a list of two-arity functions or tuples in the format `{module, function}`
+       that serve as custom validators. the function will be given the key and value as
+       arguments, and must return a list of string errors (or an empty list if no errors are present)
 
   ## Examples
 
@@ -366,12 +366,16 @@ defmodule KeywordValidator do
   end
 
   defp validate_custom({key, %{custom: custom} = opts, val, errors}) do
-    errors =
-      Enum.reduce(custom, errors, fn validator, errors ->
-        validator.(key, val) ++ errors
-      end)
-
+    errors = Enum.reduce(custom, errors, &validate_custom(&1, key, val, &2))
     {key, opts, val, errors}
+  end
+
+  defp validate_custom({module, fun}, key, val, errors) do
+    apply(module, fun, [key, val]) ++ errors
+  end
+
+  defp validate_custom(validator, key, val, errors) when is_function(validator, 2) do
+    validator.(key, val) ++ errors
   end
 
   defp to_tagged_tuple({parsed, _, []}), do: {:ok, parsed}
