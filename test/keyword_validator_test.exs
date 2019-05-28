@@ -187,6 +187,26 @@ defmodule KeywordValidatorTest do
       assert_has_error(invalid, :baz, "must be a map")
     end
 
+    test "will return errors for mfa typed keys" do
+      keyword = [foo: {String, :to_atom, ["foo"]}, bar: 0, baz: :baz]
+      schema = %{foo: [type: :mfa], bar: [type: :mfa], baz: [type: :mfa]}
+
+      assert {:error, invalid} = KeywordValidator.validate(keyword, schema)
+      assert_no_error(invalid, :foo)
+      assert_has_error(invalid, :bar, "must be a mfa")
+      assert_has_error(invalid, :baz, "must be a mfa")
+    end
+
+    test "will return errors for module typed keys" do
+      keyword = [foo: __MODULE__, bar: 0, baz: :baz]
+      schema = %{foo: [type: :module], bar: [type: :module], baz: [type: :module]}
+
+      assert {:error, invalid} = KeywordValidator.validate(keyword, schema)
+      assert_no_error(invalid, :foo)
+      assert_has_error(invalid, :bar, "must be a module")
+      assert_has_error(invalid, :baz, "must be a module")
+    end
+
     test "will return errors for number typed keys" do
       keyword = [foo: 1, bar: "bar", baz: :baz]
       schema = %{foo: [type: :number], bar: [type: :number], baz: [type: :number]}

@@ -29,6 +29,8 @@ defmodule KeywordValidator do
           | :list
           | {:list, val_type()}
           | :map
+          | :mfa
+          | :module
           | :number
           | :pid
           | :port
@@ -42,7 +44,7 @@ defmodule KeywordValidator do
           | {:required, boolean()}
           | {:type, val_type() | [val_type()]}
           | {:format, Regex.t()}
-          | {:custom, (atom(), any() -> [] | [binary()])}
+          | {:custom, (atom(), any() -> [] | [binary()]) | {module(), atom()}}
           | {:inclusion, list()}
           | {:exclusion, list()}
   @type key_opts :: [key_opt()]
@@ -220,86 +222,111 @@ defmodule KeywordValidator do
 
   defp validate_type({key, opts, val, errors}) do
     case validate_type(opts.type, val) do
-      true -> {key, opts, val, errors}
-      msg -> {key, opts, val, [msg | errors]}
+      :ok -> {key, opts, val, errors}
+      {:error, msg} -> {key, opts, val, [msg | errors]}
     end
   end
 
-  defp validate_type(:any, _val), do: true
+  defp validate_type(:any, _val), do: :ok
 
-  defp validate_type(:atom, val) when is_atom(val) and not is_nil(val), do: true
-  defp validate_type(:atom, _val), do: "must be an atom"
+  defp validate_type(:atom, val) when is_atom(val) and not is_nil(val), do: :ok
+  defp validate_type(:atom, _val), do: {:error, "must be an atom"}
 
-  defp validate_type(:binary, val) when is_binary(val), do: true
-  defp validate_type(:binary, _val), do: "must be a binary"
+  defp validate_type(:binary, val) when is_binary(val), do: :ok
+  defp validate_type(:binary, _val), do: {:error, "must be a binary"}
 
-  defp validate_type(:bitstring, val) when is_bitstring(val), do: true
-  defp validate_type(:bitstring, _val), do: "must be a bitstring"
+  defp validate_type(:bitstring, val) when is_bitstring(val), do: :ok
+  defp validate_type(:bitstring, _val), do: {:error, "must be a bitstring"}
 
-  defp validate_type(:boolean, val) when is_boolean(val), do: true
-  defp validate_type(:boolean, _val), do: "must be a boolean"
+  defp validate_type(:boolean, val) when is_boolean(val), do: :ok
+  defp validate_type(:boolean, _val), do: {:error, "must be a boolean"}
 
-  defp validate_type(:float, val) when is_float(val), do: true
-  defp validate_type(:float, _val), do: "must be a float"
+  defp validate_type(:float, val) when is_float(val), do: :ok
+  defp validate_type(:float, _val), do: {:error, "must be a float"}
 
-  defp validate_type(:function, val) when is_function(val), do: true
-  defp validate_type(:function, _val), do: "must be a function"
-  defp validate_type({:function, arity}, val) when is_function(val, arity), do: true
-  defp validate_type({:function, arity}, _val), do: "must be a function of arity #{arity}"
+  defp validate_type(:function, val) when is_function(val), do: :ok
+  defp validate_type(:function, _val), do: {:error, "must be a function"}
+  defp validate_type({:function, arity}, val) when is_function(val, arity), do: :ok
 
-  defp validate_type(:integer, val) when is_integer(val), do: true
-  defp validate_type(:integer, _val), do: "must be an integer"
+  defp validate_type({:function, arity}, _val),
+    do: {:error, "must be a function of arity #{arity}"}
+
+  defp validate_type(:integer, val) when is_integer(val), do: :ok
+  defp validate_type(:integer, _val), do: {:error, "must be an integer"}
 
   defp validate_type({:keyword, schema}, val) when is_list(val) do
     case validate(val, schema) do
-      {:ok, _} -> true
-      {:error, _errors} -> "must be a keyword with structure: #{schema_string(schema)}"
+      {:ok, _} -> :ok
+      {:error, _errors} -> {:error, "must be a keyword with structure: #{schema_string(schema)}"}
     end
   end
 
   defp validate_type({:keyword, schema}, _val) do
-    "must be a keyword with structure: #{schema_string(schema)}"
+    {:error, "must be a keyword with structure: #{schema_string(schema)}"}
   end
 
-  defp validate_type(:list, val) when is_list(val), do: true
-  defp validate_type(:list, _val), do: "must be a list"
+  defp validate_type(:list, val) when is_list(val), do: :ok
+  defp validate_type(:list, _val), do: {:error, "must be a list"}
 
   defp validate_type({:list, type}, val) when is_list(val) do
-    if Enum.all?(val, fn item -> validate_type(type, item) == true end) do
-      true
+    if Enum.all?(val, fn item -> validate_type(type, item) == :ok end) do
+      :ok
     else
-      "must be a list of type #{inspect(type)}"
+      {:error, "must be a list of type #{inspect(type)}"}
     end
   end
 
-  defp validate_type({:list, type}, _val), do: "must be a list of type #{inspect(type)}"
+  defp validate_type({:list, type}, _val), do: {:error, "must be a list of type #{inspect(type)}"}
 
-  defp validate_type(:map, val) when is_map(val), do: true
-  defp validate_type(:map, _val), do: "must be a map"
+  defp validate_type(:map, val) when is_map(val), do: :ok
+  defp validate_type(:map, _val), do: {:error, "must be a map"}
 
-  defp validate_type(:number, val) when is_number(val), do: true
-  defp validate_type(:number, _val), do: "must be a number"
+  defp validate_type(:mfa, {mod, fun, arg})
+       when is_atom(mod) and not is_nil(mod) and is_atom(fun) and not is_nil(fun) and is_list(arg) do
+    if Code.ensure_loaded?(mod) and function_exported?(mod, fun, length(arg)) do
+      :ok
+    else
+      {:error, "must be a mfa"}
+    end
+  end
 
-  defp validate_type(:pid, val) when is_pid(val), do: true
-  defp validate_type(:pid, _val), do: "must be a PID"
+  defp validate_type(:mfa, _val), do: {:error, "must be a mfa"}
 
-  defp validate_type(:port, val) when is_port(val), do: true
-  defp validate_type(:port, _val), do: "must be a port"
+  defp validate_type(:module, val) when is_atom(val) and not is_nil(val) do
+    if Code.ensure_loaded?(val) do
+      :ok
+    else
+      {:error, "must be a module"}
+    end
+  end
 
-  defp validate_type(:struct, %{__struct__: _}), do: true
-  defp validate_type(:struct, _val), do: "must be a struct"
-  defp validate_type({:struct, type1}, %{__struct__: type2}) when type1 == type2, do: true
-  defp validate_type({:struct, type}, _val), do: "must be a struct of type #{inspect(type)}"
+  defp validate_type(:module, _val), do: {:error, "must be a module"}
 
-  defp validate_type(:tuple, val) when is_tuple(val), do: true
-  defp validate_type(:tuple, _val), do: "must be a tuple"
+  defp validate_type(:number, val) when is_number(val), do: :ok
+  defp validate_type(:number, _val), do: {:error, "must be a number"}
+
+  defp validate_type(:pid, val) when is_pid(val), do: :ok
+  defp validate_type(:pid, _val), do: {:error, "must be a PID"}
+
+  defp validate_type(:port, val) when is_port(val), do: :ok
+  defp validate_type(:port, _val), do: {:error, "must be a port"}
+
+  defp validate_type(:struct, %{__struct__: _}), do: :ok
+  defp validate_type(:struct, _val), do: {:error, "must be a struct"}
+  defp validate_type({:struct, type1}, %{__struct__: type2}) when type1 == type2, do: :ok
+
+  defp validate_type({:struct, type}, _val),
+    do: {:error, "must be a struct of type #{inspect(type)}"}
+
+  defp validate_type(:tuple, val) when is_tuple(val), do: :ok
+  defp validate_type(:tuple, _val), do: {:error, "must be a tuple"}
 
   defp validate_type({:tuple, size}, val)
        when is_tuple(val) and is_integer(size) and tuple_size(val) == size,
-       do: true
+       do: :ok
 
   defp validate_type({:tuple, size}, _val) when is_integer(size),
-    do: "must be a tuple of size #{size}"
+    do: {:error, "must be a tuple of size #{size}"}
 
   defp validate_type({:tuple, type}, val)
        when is_tuple(type) and is_tuple(val) and tuple_size(type) == tuple_size(val) do
@@ -307,21 +334,21 @@ defmodule KeywordValidator do
     val_list = Tuple.to_list(val)
     validations = Enum.zip(type_list, val_list)
 
-    if Enum.any?(validations, fn {type, val} -> validate_type(type, val) == true end) do
-      true
+    if Enum.any?(validations, fn {type, val} -> validate_type(type, val) == :ok end) do
+      :ok
     else
-      "must be a tuple with the structure: #{inspect(type)}"
+      {:error, "must be a tuple with the structure: #{inspect(type)}"}
     end
   end
 
   defp validate_type({:tuple, type}, _val),
-    do: "must be a tuple with the structure: #{inspect(type)}"
+    do: {:error, "must be a tuple with the structure: #{inspect(type)}"}
 
   defp validate_type(types, val) when is_list(types) do
-    if Enum.any?(types, fn type -> validate_type(type, val) == true end) do
-      true
+    if Enum.any?(types, fn type -> validate_type(type, val) == :ok end) do
+      :ok
     else
-      "must be one of the following: #{inspect(types)}"
+      {:error, "must be one of the following: #{inspect(types)}"}
     end
   end
 
