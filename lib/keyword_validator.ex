@@ -50,8 +50,10 @@ defmodule KeywordValidator do
   @type key_opts :: [key_opt()]
   @type schema :: %{atom() => key_opts()}
   @type invalid :: [{atom(), [String.t()]}]
+  @type option :: {:strict, boolean()}
+  @type options :: [option()]
 
-  @default_opts [
+  @default_key_opts [
     default: nil,
     required: false,
     type: :any,
@@ -82,6 +84,10 @@ defmodule KeywordValidator do
        that serve as custom validators. the function will be given the key and value as
        arguments, and must return a list of string errors (or an empty list if no errors are present)
 
+  ## Options
+
+    * `:strict` - boolean representing whether extra keys will become errors, defaults to `true`
+
   ## Examples
 
       iex> KeywordValidator.validate([foo: :foo], %{foo: [type: :atom, required: true]})
@@ -89,6 +95,9 @@ defmodule KeywordValidator do
 
       iex> KeywordValidator.validate([foo: :foo], %{bar: [type: :any]})
       {:error, [foo: ["is not a valid key"]]}
+
+      iex> KeywordValidator.validate([foo: :foo], %{bar: [type: :any]}, strict: false)
+      {:ok, []}
 
       iex> KeywordValidator.validate([foo: :foo], %{foo: [inclusion: [:one, :two]]})
       {:error, [foo: ["must be one of: [:one, :two]"]]}
@@ -109,10 +118,12 @@ defmodule KeywordValidator do
       {:error, [foo: ["some error"]]}
 
   """
-  @spec validate(keyword(), schema()) :: {:ok, keyword()} | {:error, invalid()}
-  def validate(keyword, schema) when is_list(keyword) and is_map(schema) do
+  @spec validate(keyword(), schema(), options()) :: {:ok, keyword()} | {:error, invalid()}
+  def validate(keyword, schema, opts \\ []) when is_list(keyword) and is_map(schema) do
+    strict = Keyword.get(opts, :strict, true)
+
     {[], keyword, []}
-    |> validate_extra_keys(schema)
+    |> validate_extra_keys(schema, strict)
     |> validate_keys(schema)
     |> to_tagged_tuple()
   end
@@ -137,9 +148,9 @@ defmodule KeywordValidator do
       foo: ["must be one of: [:one, :two]"]
 
   """
-  @spec validate!(keyword(), schema()) :: any()
-  def validate!(keyword, schema) do
-    case validate(keyword, schema) do
+  @spec validate!(keyword(), schema(), options()) :: Keyword.t()
+  def validate!(keyword, schema, opts \\ []) do
+    case validate(keyword, schema, opts) do
       {:ok, parsed} ->
         parsed
 
@@ -158,7 +169,11 @@ defmodule KeywordValidator do
     end
   end
 
-  defp validate_extra_keys({_parsed, keyword, _invalid} = results, schema) do
+  defp validate_extra_keys(results, _schema, false) do
+    results
+  end
+
+  defp validate_extra_keys({_parsed, keyword, _invalid} = results, schema, true) do
     Enum.reduce(keyword, results, fn {key, _val}, {parsed, keyword, invalid} ->
       if Map.has_key?(schema, key) do
         {parsed, keyword, invalid}
@@ -183,7 +198,7 @@ defmodule KeywordValidator do
   end
 
   defp maybe_validate_key({key, opts}, {parsed, keyword, invalid}) do
-    opts = @default_opts |> Keyword.merge(opts) |> Enum.into(%{})
+    opts = @default_key_opts |> Keyword.merge(opts) |> Enum.into(%{})
 
     if validate_key?(keyword, key, opts) do
       validate_key({key, opts}, {parsed, keyword, invalid})
