@@ -12,7 +12,7 @@ The package can be installed by adding `keyword_validator` to your list of depen
 ```elixir
 def deps do
   [
-    {:keyword_validator, "~> 0.2"}
+    {:keyword_validator, "~> 0.4"}
   ]
 end
 ```
