@@ -18,6 +18,21 @@ defmodule KeywordValidatorTest do
       assert_has_error(invalid, :baz, "is not a valid key")
     end
 
+    test "will not return errors for extra keys when not strict" do
+      keyword = [bar: :bar]
+      schema = %{foo: []}
+
+      assert {:ok, []} = KeywordValidator.validate(keyword, schema, strict: false)
+    end
+
+    test "will return errors for extra keys when strict" do
+      keyword = [bar: :bar]
+      schema = %{foo: []}
+
+      assert {:error, invalid} = KeywordValidator.validate(keyword, schema, strict: true)
+      assert_has_error(invalid, :bar, "is not a valid key")
+    end
+
     test "will return errors for required keys" do
       keyword = [foo: :foo, bar: nil, baz: nil]
       schema = %{foo: [required: true], bar: [required: true], baz: [required: true]}
