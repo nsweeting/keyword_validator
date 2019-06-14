@@ -19,7 +19,8 @@ defmodule KeywordValidator do
   @type val_type ::
           :any
           | :atom
-          | :bistring
+          | :binary
+          | :bitstring
           | :boolean
           | :float
           | :function
