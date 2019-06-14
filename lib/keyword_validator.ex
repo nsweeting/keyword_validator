@@ -19,6 +19,7 @@ defmodule KeywordValidator do
   @type val_type ::
           :any
           | :atom
+          | :binary
           | :bistring
           | :boolean
           | :float
@@ -36,6 +37,7 @@ defmodule KeywordValidator do
           | :port
           | :struct
           | {:struct, module()}
+          | :timeout
           | :tuple
           | {:tuple, size :: non_neg_integer()}
           | {:tuple, tuple_val_types :: tuple()}
