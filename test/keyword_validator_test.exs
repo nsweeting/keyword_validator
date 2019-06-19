@@ -167,6 +167,26 @@ defmodule KeywordValidatorTest do
       assert_has_error(invalid, :baz, "must be a keyword with structure: [baz: [type: :integer]]")
     end
 
+    test "will use defaults for lists of keyword and schema typed keys" do
+      keyword = [foo: [[foo: :foo]]]
+
+      schema = %{
+        foo: [type: {:list, {:keyword, %{foo: [type: :atom], bar: [type: :atom, default: :bar]}}}]
+      }
+
+      assert {:ok, [foo: [[foo: :foo, bar: :bar]]]} = KeywordValidator.validate(keyword, schema)
+    end
+
+    test "will use defaults for keyword and schema typed keys" do
+      keyword = [foo: [foo: :foo]]
+
+      schema = %{
+        foo: [type: {:keyword, %{foo: [type: :atom], bar: [type: :atom, default: :bar]}}]
+      }
+
+      assert {:ok, [foo: [foo: :foo, bar: :bar]]} = KeywordValidator.validate(keyword, schema)
+    end
+
     test "will return errors for list typed keys" do
       keyword = [foo: [], bar: 0, baz: :baz]
       schema = %{foo: [type: :list], bar: [type: :list], baz: [type: :list]}
