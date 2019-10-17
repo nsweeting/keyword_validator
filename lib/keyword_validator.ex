@@ -37,6 +37,7 @@ defmodule KeywordValidator do
           | :port
           | :struct
           | {:struct, module()}
+          | :timeout
           | :tuple
           | {:tuple, size :: non_neg_integer()}
           | {:tuple, tuple_val_types :: tuple()}
@@ -122,8 +123,10 @@ defmodule KeywordValidator do
   @spec validate(keyword(), schema(), options()) :: {:ok, keyword()} | {:error, invalid()}
   def validate(keyword, schema, opts \\ []) when is_list(keyword) and is_map(schema) do
     strict = Keyword.get(opts, :strict, true)
+    valid = []
+    invalid = []
 
-    {[], keyword, []}
+    {keyword, valid, invalid}
     |> validate_extra_keys(schema, strict)
     |> validate_keys(schema)
     |> to_tagged_tuple()
@@ -152,8 +155,8 @@ defmodule KeywordValidator do
   @spec validate!(keyword(), schema(), options()) :: Keyword.t()
   def validate!(keyword, schema, opts \\ []) do
     case validate(keyword, schema, opts) do
-      {:ok, parsed} ->
-        parsed
+      {:ok, valid} ->
+        valid
 
       {:error, invalid} ->
         raise ArgumentError, """
@@ -170,16 +173,14 @@ defmodule KeywordValidator do
     end
   end
 
-  defp validate_extra_keys(results, _schema, false) do
-    results
-  end
+  defp validate_extra_keys(results, _schema, false), do: results
 
-  defp validate_extra_keys({_parsed, keyword, _invalid} = results, schema, true) do
-    Enum.reduce(keyword, results, fn {key, _val}, {parsed, keyword, invalid} ->
+  defp validate_extra_keys({keyword, _valid, _invalid} = results, schema, true) do
+    Enum.reduce(keyword, results, fn {key, _val}, {keyword, valid, invalid} ->
       if Map.has_key?(schema, key) do
-        {parsed, keyword, invalid}
+        {keyword, valid, invalid}
       else
-        {parsed, keyword, put_error(invalid, key, "is not a valid key")}
+        {keyword, valid, put_error(invalid, key, "is not a valid key")}
       end
     end)
   end
@@ -198,13 +199,13 @@ defmodule KeywordValidator do
     Enum.reduce(schema, result, &maybe_validate_key(&1, &2))
   end
 
-  defp maybe_validate_key({key, opts}, {parsed, keyword, invalid}) do
+  defp maybe_validate_key({key, opts}, {keyword, valid, invalid}) do
     opts = @default_key_opts |> Keyword.merge(opts) |> Enum.into(%{})
 
     if validate_key?(keyword, key, opts) do
-      validate_key({key, opts}, {parsed, keyword, invalid})
+      validate_key({key, opts}, {keyword, valid, invalid})
     else
-      {parsed, keyword, invalid}
+      {keyword, valid, invalid}
     end
   end
 
@@ -212,7 +213,7 @@ defmodule KeywordValidator do
     Keyword.has_key?(keyword, key) || opts.required || opts.default
   end
 
-  defp validate_key({key, opts}, {parsed, keyword, invalid}) do
+  defp validate_key({key, opts}, {keyword, valid, invalid}) do
     val = Keyword.get(keyword, key, opts.default)
 
     {key, opts, val, []}
@@ -223,8 +224,8 @@ defmodule KeywordValidator do
     |> validate_exclusion()
     |> validate_custom()
     |> case do
-      {key, _, val, []} -> {Keyword.put(parsed, key, val), keyword, invalid}
-      {key, _, _, errors} -> {parsed, keyword, put_error(invalid, key, errors)}
+      {key, _, val, []} -> {keyword, Keyword.put(valid, key, val), invalid}
+      {key, _, _, errors} -> {keyword, valid, put_error(invalid, key, errors)}
     end
   end
 
@@ -337,6 +338,10 @@ defmodule KeywordValidator do
   defp validate_type({:struct, type}, _val),
     do: {:error, "must be a struct of type #{inspect(type)}"}
 
+  defp validate_type(:timeout, val) when is_integer(val), do: {:ok, val}
+  defp validate_type(:timeout, :infinity = val), do: {:ok, val}
+  defp validate_type(:timeout, _val), do: {:error, "must be a timeout"}
+
   defp validate_type(:tuple, val) when is_tuple(val), do: {:ok, val}
   defp validate_type(:tuple, _val), do: {:error, "must be a tuple"}
 
@@ -428,7 +433,7 @@ defmodule KeywordValidator do
     validator.(key, val) ++ errors
   end
 
-  defp to_tagged_tuple({parsed, _, []}), do: {:ok, parsed}
+  defp to_tagged_tuple({_, valid, []}), do: {:ok, valid}
   defp to_tagged_tuple({_, _, invalid}), do: {:error, invalid}
 
   defp format_invalid(invalid) do
