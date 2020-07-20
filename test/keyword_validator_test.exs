@@ -67,6 +67,13 @@ defmodule KeywordValidatorTest do
       assert {:ok, [foo: :foo]} = KeywordValidator.validate(keyword, schema)
     end
 
+    test "will set false defaults" do
+      keyword = []
+      schema = %{foo: [default: false]}
+
+      assert {:ok, [foo: false]} = KeywordValidator.validate(keyword, schema)
+    end
+
     test "will return errors for atom typed keys" do
       keyword = [foo: :foo, bar: 0, baz: "baz"]
       schema = %{foo: [type: :atom], bar: [type: :atom], baz: [type: :atom]}

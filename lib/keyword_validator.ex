@@ -210,7 +210,7 @@ defmodule KeywordValidator do
   end
 
   defp validate_key?(keyword, key, opts) do
-    Keyword.has_key?(keyword, key) || opts.required || opts.default
+    Keyword.has_key?(keyword, key) || opts.required || opts.default != nil
   end
 
   defp validate_key({key, opts}, {keyword, valid, invalid}) do
