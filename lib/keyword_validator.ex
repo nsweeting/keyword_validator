@@ -5,34 +5,48 @@ defmodule KeywordValidator do
   The main function in this module is `validate/2`, which allows developers to
   validate a keyword list against a given schema.
 
-  A schema is simply a map that matches the keys for the keyword list. The values
-  in the schema represent the options available during validation.
+  A schema is a keyword list that matches the keys for the keyword list.
+  The values in the schema represent the options available during validation.
 
-      iex> KeywordValidator.validate([foo: :foo], %{foo: [type: :atom, required: true]})
-      {:ok, [foo: :foo]}
+      iex> KeywordValidator.validate([foo: :bar], [foo: [is: :atom]])
+      {:ok, [foo: :bar]}
 
-      iex> KeywordValidator.validate([foo: :foo], %{foo: [inclusion: [:one, :two]]})
-      {:error, [foo: ["must be one of: [:one, :two]"]]}
-
+      iex> KeywordValidator.validate([foo: :bar], [foo: [is: :integer]])
+      {:error, [foo: ["must be an integer"]]}
   """
 
-  @type val_type ::
-          :any
+  alias KeywordValidator.{Docs, Schema}
+
+  ################################
+  # Types
+  ################################
+
+  @typedoc """
+  Various value `:is` options.
+  """
+  @type value_is ::
+          {:=, any()}
+          | :any
           | :atom
           | :binary
           | :bitstring
           | :boolean
           | :float
-          | :function
-          | {:function, arity :: non_neg_integer()}
+          | :fun
+          | {:fun, arity :: non_neg_integer()}
+          | {:in, [any()]}
           | :integer
+          | :keyword
           | {:keyword, schema()}
           | :list
-          | {:list, val_type()}
+          | {:list, value_is()}
           | :map
           | :mfa
+          | :mod_args
+          | :mod_fun
           | :module
           | :number
+          | {:one_of, [value_is()]}
           | :pid
           | :port
           | :struct
@@ -40,88 +54,176 @@ defmodule KeywordValidator do
           | :timeout
           | :tuple
           | {:tuple, size :: non_neg_integer()}
-          | {:tuple, tuple_val_types :: tuple()}
-  @type key_opt ::
-          {:default, any()}
+          | {:tuple, tuple_value_types :: tuple()}
+
+  @typedoc """
+  Custom validation logic for key values.
+  """
+  @type custom_validator ::
+          (key :: atom(), value :: any() -> [] | [error :: binary()])
+          | {module(), function :: atom()}
+
+  @typedoc """
+  Individual value options.
+  """
+  @type value_opt ::
+          {:is, value_is()}
+          | {:default, any()}
           | {:required, boolean()}
-          | {:type, val_type() | [val_type()]}
-          | {:format, Regex.t()}
-          | {:custom, (atom(), any() -> [] | [binary()]) | {module(), atom()}}
-          | {:inclusion, list()}
-          | {:exclusion, list()}
-  @type key_opts :: [key_opt()]
-  @type schema :: %{atom() => key_opts()}
-  @type invalid :: [{atom(), [String.t()]}]
+          | {:custom, [custom_validator()]}
+          | {:doc, false | binary()}
+
+  @typedoc """
+  All value options.
+  """
+  @type value_opts :: [value_opt()]
+
+  @typedoc """
+  A keyword base schema.
+  """
+  @type base_schema :: keyword(value_opts())
+
+  @typedoc """
+  A keyword schema.
+  """
+  @type schema :: base_schema() | struct()
+
+  @typedoc """
+  An invalid keyword key.
+  """
+  @type invalid :: keyword([String.t()])
+
+  @typedoc """
+  Individual validation options.
+  """
   @type option :: {:strict, boolean()}
+
+  @typedoc """
+  All validation options.
+  """
   @type options :: [option()]
 
-  @default_key_opts [
-    default: nil,
-    required: false,
-    type: :any,
-    format: nil,
-    custom: [],
-    inclusion: [],
-    exclusion: []
-  ]
+  ################################
+  # Public API
+  ################################
+
+  @doc """
+  Prepares a schema or raises an `ArgumentError` exception if invalid.
+
+  A schema is a keyword list of keys and value options.
+
+  This is the preferred method of providing a validation schema as it ensures
+  your schema is valid and avoids running additional validation on each invocation.
+  You can then declare your schema as a module attribute:
+
+      @opts_schema KeywordValidator.schema!([...])
+
+      KeywordValidator.validate!(keyword, @opts_schema)
+
+  ## Value Options
+
+  #{KeywordValidator.Docs.build(Schema.schema())}
+
+  ## Is Options
+
+  The following value types are available for use with the `:is` option:
+
+  * `{:=, value}` - Equal to value.
+  * `:any` - Any value.
+  * `:atom` - An atom.
+  * `:binary` - A binary.
+  * `:bitstring` - A bitstring.
+  * `:boolean` - A boolean.
+  * `:float` - A float.
+  * `:fun` - A function.
+  * `{:fun, arity}` - A function with specified arity.
+  * `{:in, [value]}` - In the list of values.
+  * `:integer` - An integer.
+  * `:keyword` - A keyword list.
+  * `:list` - A list.
+  * `:map` - A map.
+  * `:mfa` - A module, function and args.
+  * `:mod_args` - A module and args.
+  * `:mod_fun` - A module and function.
+  * `:mod` - A module.
+  * `:number` - A number.
+  * `{:one_of, [type]}` - Any one of the provided types.
+  * `:pid` - A PID.
+  * `:port` - A port.
+  * `:struct` - A struct.
+  * `{:struct, type}` - A struct of the provided type.
+  * `:timeout` - A timeout (integer or `:infinite`).
+  * `:tuple` - A tuple.
+  * `{:tuple, size}` - A tuple of the provided size.
+  * `{:tuple, tuple}` - A tuple with the provided tuple types.
+  """
+  @spec schema!(base_schema()) :: struct()
+  def schema!(schema) do
+    case Schema.new(schema) do
+      {:ok, schema} ->
+        schema
+
+      {:error, {:invalid, key}} ->
+        raise ArgumentError, """
+        Options given for schema key #{inspect(key)} are invalid.
+        """
+
+      {:error, :invalid} ->
+        raise ArgumentError, """
+        Invalid schema. Must be a keyword list.
+        """
+    end
+  end
 
   @doc """
   Validates a keyword list using the provided schema.
 
-  A schema is a simple map, with each key representing a key in your keyword list.
-  The values in the map represent the options available for validation.
+  A schema is a keyword list (or prepared schema via `schema!/1`) - with each key
+  representing a key in your keyword list. The values in the schema keyword list
+  represent the options available for validation.
 
   If the validation passes, we are returned a two-item tuple of `{:ok, keyword}`.
   Otherwise, returns `{:error, invalid}` - where `invalid` is a keyword list of errors.
 
-  ## Schema Options
+  ## Schema
 
-    * `:required` - boolean representing whether the key is required or not, defaults to `false`
-    * `:default` - the default value for the key if not provided one, defaults to `nil`
-    * `:type` - the type associated with the key value. must be one of `t:val_type/0`
-    * `:format` - a regex used to validate string format
-    * `:inclusion` - a list of items that the value must be a included in
-    * `:exclusion` - a list of items that the value must not be included in
-    * `:custom` - a list of two-arity functions or tuples in the format `{module, function}`
-       that serve as custom validators. the function will be given the key and value as
-       arguments, and must return a list of string errors (or an empty list if no errors are present)
+  Please see `schema!/1` for options available when building schemas.
 
   ## Options
 
-    * `:strict` - boolean representing whether extra keys will become errors, defaults to `true`
+    * `:strict` - Boolean representing whether extra keys will become errors. Defaults to `true`.
 
   ## Examples
 
-      iex> KeywordValidator.validate([foo: :foo], %{foo: [type: :atom, required: true]})
+      iex> KeywordValidator.validate([foo: :foo], [foo: [is: :atom, required: true]])
       {:ok, [foo: :foo]}
 
-      iex> KeywordValidator.validate([foo: :foo], %{bar: [type: :any]})
+      iex> KeywordValidator.validate([foo: :foo], [bar: [is: :any]])
       {:error, [foo: ["is not a valid key"]]}
 
-      iex> KeywordValidator.validate([foo: :foo], %{bar: [type: :any]}, strict: false)
+      iex> KeywordValidator.validate([foo: :foo], [bar: [is: :any]], strict: false)
       {:ok, []}
 
-      iex> KeywordValidator.validate([foo: :foo], %{foo: [inclusion: [:one, :two]]})
+      iex> KeywordValidator.validate([foo: :foo], [foo: [is: {:in, [:one, :two]}]])
       {:error, [foo: ["must be one of: [:one, :two]"]]}
 
-      iex> KeywordValidator.validate([foo: {:foo, 1}], %{foo: [type: {:tuple, {:atom, :integer}}]})
+      iex> KeywordValidator.validate([foo: {:foo, 1}], [foo: [is: {:tuple, {:atom, :integer}}]])
       {:ok, [foo: {:foo, 1}]}
 
-      iex> KeywordValidator.validate([foo: ["one", 2]], %{foo: [type: {:list, :binary}]})
+      iex> KeywordValidator.validate([foo: ["one", 2]], [foo: [is: {:list, :binary}]])
       {:error, [foo: ["must be a list of type :binary"]]}
 
-      iex> KeywordValidator.validate([foo: "foo"], %{foo: [format: ~r/foo/]})
-      {:ok, [foo: "foo"]}
-
-      iex> KeywordValidator.validate([foo: %Foo{}], %{foo: [type: {:struct, Bar}]})
+      iex> KeywordValidator.validate([foo: %Foo{}], [foo: [is: {:struct, Bar}]])
       {:error, [foo: ["must be a struct of type Bar"]]}
 
-      iex> KeywordValidator.validate([foo: "foo"], %{foo: [custom: [fn key, val -> ["some error"] end]]})
+      iex> KeywordValidator.validate([foo: "foo"], [foo: [is: :any, custom: [fn key, val -> ["some error"] end]]])
       {:error, [foo: ["some error"]]}
 
   """
   @spec validate(keyword(), schema(), options()) :: {:ok, keyword()} | {:error, invalid()}
-  def validate(keyword, schema, opts \\ []) when is_list(keyword) and is_map(schema) do
+  def validate(keyword, schema, opts \\ [])
+
+  def validate(keyword, %Schema{schema: schema}, opts) when is_list(keyword) do
     strict = Keyword.get(opts, :strict, true)
     valid = []
     invalid = []
@@ -132,25 +234,29 @@ defmodule KeywordValidator do
     |> to_tagged_tuple()
   end
 
+  def validate(keyword, schema, opts) do
+    schema = schema!(schema)
+    validate(keyword, schema, opts)
+  end
+
   @doc """
   The same as `validate/2` but raises an `ArgumentError` exception if invalid.
 
   ## Example
 
-      iex> KeywordValidator.validate!([foo: :foo], %{foo: [type: :atom, required: true]})
+      iex> KeywordValidator.validate!([foo: :bar], [foo: [is: :atom, required: true]])
       [foo: :foo]
 
-      iex> KeywordValidator.validate!([foo: :foo], %{foo: [inclusion: [:one, :two]]})
+      iex> KeywordValidator.validate!([foo: "bar"], [foo: [is: :atom, required: true]])
       ** (ArgumentError) Invalid keyword given.
 
       Keyword:
 
-      [foo: :foo]
+      [foo: "bar"]
 
       Invalid:
 
-      foo: ["must be one of: [:one, :two]"]
-
+      foo: ["must be an atom"]
   """
   @spec validate!(keyword(), schema(), options()) :: Keyword.t()
   def validate!(keyword, schema, opts \\ []) do
@@ -173,11 +279,31 @@ defmodule KeywordValidator do
     end
   end
 
+  @doc ~S"""
+  Builds documentation for a given schema.
+
+  This can be used to inject documentation in your docstrings. For example:
+
+      @options_schema KeywordValidator.schema!([key: [type: :any, doc: "Some option."]])
+
+      @doc "Options:\n#{KeywordValidator.docs(@options_schema)}"
+
+  This will automatically generate documentation that includes information on
+  required keys and default values.
+  """
+  @spec docs(schema()) :: binary()
+  def docs(%Schema{} = schema), do: Docs.build(schema)
+  def docs(schema), do: schema |> schema!() |> docs()
+
+  ################################
+  # Private API
+  ################################
+
   defp validate_extra_keys(results, _schema, false), do: results
 
   defp validate_extra_keys({keyword, _valid, _invalid} = results, schema, true) do
     Enum.reduce(keyword, results, fn {key, _val}, {keyword, valid, invalid} ->
-      if Map.has_key?(schema, key) do
+      if Keyword.has_key?(schema, key) do
         {keyword, valid, invalid}
       else
         {keyword, valid, put_error(invalid, key, "is not a valid key")}
@@ -200,8 +326,6 @@ defmodule KeywordValidator do
   end
 
   defp maybe_validate_key({key, opts}, {keyword, valid, invalid}) do
-    opts = @default_key_opts |> Keyword.merge(opts) |> Enum.into(%{})
-
     if validate_key?(keyword, key, opts) do
       validate_key({key, opts}, {keyword, valid, invalid})
     else
@@ -218,13 +342,10 @@ defmodule KeywordValidator do
 
     {key, opts, val, []}
     |> validate_required()
-    |> validate_type()
-    |> validate_format()
-    |> validate_inclusion()
-    |> validate_exclusion()
+    |> validate_is()
     |> validate_custom()
     |> case do
-      {key, _, val, []} -> {keyword, Keyword.put(valid, key, val), invalid}
+      {key, _, val, []} -> {keyword, [{key, val} | valid], invalid}
       {key, _, _, errors} -> {keyword, valid, put_error(invalid, key, errors)}
     end
   end
@@ -237,80 +358,101 @@ defmodule KeywordValidator do
     validation
   end
 
-  defp validate_type({key, opts, val, errors}) do
-    case validate_type(opts.type, val) do
+  defp validate_is({key, opts, val, errors}) do
+    case validate_is(opts.is, val) do
       {:ok, val} -> {key, opts, val, errors}
       {:error, msg} -> {key, opts, val, [msg | errors]}
     end
   end
 
-  defp validate_type(:any, val), do: {:ok, val}
+  defp validate_is({:=, val1}, val2) when val1 == val2, do: {:ok, val2}
+  defp validate_is({:=, val}, _val), do: {:error, "must be equal to: #{inspect(val)}"}
 
-  defp validate_type(:atom, val) when is_atom(val) and not is_nil(val), do: {:ok, val}
-  defp validate_type(:atom, _val), do: {:error, "must be an atom"}
+  defp validate_is(:any, val), do: {:ok, val}
 
-  defp validate_type(:binary, val) when is_binary(val), do: {:ok, val}
-  defp validate_type(:binary, _val), do: {:error, "must be a binary"}
+  defp validate_is(:atom, val) when is_atom(val) and not is_nil(val), do: {:ok, val}
+  defp validate_is(:atom, _val), do: {:error, "must be an atom"}
 
-  defp validate_type(:bitstring, val) when is_bitstring(val), do: {:ok, val}
-  defp validate_type(:bitstring, _val), do: {:error, "must be a bitstring"}
+  defp validate_is(:binary, val) when is_binary(val), do: {:ok, val}
+  defp validate_is(:binary, _val), do: {:error, "must be a binary"}
 
-  defp validate_type(:boolean, val) when is_boolean(val), do: {:ok, val}
-  defp validate_type(:boolean, _val), do: {:error, "must be a boolean"}
+  defp validate_is(:bitstring, val) when is_bitstring(val), do: {:ok, val}
+  defp validate_is(:bitstring, _val), do: {:error, "must be a bitstring"}
 
-  defp validate_type(:float, val) when is_float(val), do: {:ok, val}
-  defp validate_type(:float, _val), do: {:error, "must be a float"}
+  defp validate_is(:boolean, val) when is_boolean(val), do: {:ok, val}
+  defp validate_is(:boolean, _val), do: {:error, "must be a boolean"}
 
-  defp validate_type(:function, val) when is_function(val), do: {:ok, val}
-  defp validate_type(:function, _val), do: {:error, "must be a function"}
-  defp validate_type({:function, arity}, val) when is_function(val, arity), do: {:ok, val}
+  defp validate_is({:in, vals}, val) when is_list(vals) do
+    if val in vals do
+      {:ok, val}
+    else
+      {:error, "must be one of: #{inspect(vals)}"}
+    end
+  end
 
-  defp validate_type({:function, arity}, _val),
+  defp validate_is(:float, val) when is_float(val), do: {:ok, val}
+  defp validate_is(:float, _val), do: {:error, "must be a float"}
+
+  defp validate_is(:fun, val) when is_function(val), do: {:ok, val}
+  defp validate_is(:fun, _val), do: {:error, "must be a function"}
+  defp validate_is({:fun, arity}, val) when is_function(val, arity), do: {:ok, val}
+
+  defp validate_is({:fun, arity}, _val),
     do: {:error, "must be a function of arity #{arity}"}
 
-  defp validate_type(:integer, val) when is_integer(val), do: {:ok, val}
-  defp validate_type(:integer, _val), do: {:error, "must be an integer"}
+  defp validate_is(:integer, val) when is_integer(val), do: {:ok, val}
+  defp validate_is(:integer, _val), do: {:error, "must be an integer"}
 
-  defp validate_type({:keyword, schema}, val) when is_list(val) do
+  defp validate_is(:keyword, val) when is_list(val) do
+    Enum.reduce_while(val, {:ok, val}, fn
+      {key, _}, acc when is_atom(key) -> {:cont, acc}
+      _, _ -> {:halt, {:error, "must be a keyword list"}}
+    end)
+  end
+
+  defp validate_is(:keyword, _val), do: {:error, "must be a keyword list"}
+
+  defp validate_is({:keyword, schema}, val) when is_list(val) do
     case validate(val, schema) do
       {:ok, val} -> {:ok, val}
       {:error, _errors} -> {:error, "must be a keyword with structure: #{schema_string(schema)}"}
     end
   end
 
-  defp validate_type({:keyword, schema}, _val) do
+  defp validate_is({:keyword, schema}, _val) do
     {:error, "must be a keyword with structure: #{schema_string(schema)}"}
   end
 
-  defp validate_type(:list, val) when is_list(val), do: {:ok, val}
-  defp validate_type(:list, _val), do: {:error, "must be a list"}
+  defp validate_is(:list, val) when is_list(val), do: {:ok, val}
+  defp validate_is(:list, _val), do: {:error, "must be a list"}
 
-  defp validate_type({:list, type}, val) when is_list(val) do
+  defp validate_is({:list, type}, val) when is_list(val) do
     Enum.reduce_while(val, {:ok, []}, fn item, {:ok, acc} ->
-      case validate_type(type, item) do
+      case validate_is(type, item) do
         {:ok, val} -> {:cont, {:ok, acc ++ [val]}}
         {:error, _} -> {:halt, {:error, "must be a list of type #{inspect(type)}"}}
       end
     end)
   end
 
-  defp validate_type({:list, type}, _val), do: {:error, "must be a list of type #{inspect(type)}"}
+  defp validate_is({:list, type}, _val), do: {:error, "must be a list of type #{inspect(type)}"}
 
-  defp validate_type(:map, val) when is_map(val), do: {:ok, val}
-  defp validate_type(:map, _val), do: {:error, "must be a map"}
+  defp validate_is(:map, val) when is_map(val), do: {:ok, val}
+  defp validate_is(:map, _val), do: {:error, "must be a map"}
 
-  defp validate_type(:mfa, {mod, fun, arg} = val)
-       when is_atom(mod) and not is_nil(mod) and is_atom(fun) and not is_nil(fun) and is_list(arg) do
-    if Code.ensure_loaded?(mod) and function_exported?(mod, fun, length(arg)) do
+  defp validate_is(:mfa, {mod, fun, args} = val)
+       when is_atom(mod) and not is_nil(mod) and is_atom(fun) and not is_nil(fun) and
+              is_list(args) do
+    if Code.ensure_loaded?(mod) and function_exported?(mod, fun, length(args)) do
       {:ok, val}
     else
       {:error, "must be a mfa"}
     end
   end
 
-  defp validate_type(:mfa, _val), do: {:error, "must be a mfa"}
+  defp validate_is(:mfa, _val), do: {:error, "must be a mfa"}
 
-  defp validate_type(:module, val) when is_atom(val) and not is_nil(val) do
+  defp validate_is(:mod, val) when is_atom(val) and not is_nil(val) do
     if Code.ensure_loaded?(val) do
       {:ok, val}
     else
@@ -318,103 +460,89 @@ defmodule KeywordValidator do
     end
   end
 
-  defp validate_type(:module, _val), do: {:error, "must be a module"}
+  defp validate_is(:mod, _val), do: {:error, "must be a module"}
 
-  defp validate_type(:number, val) when is_number(val), do: {:ok, val}
-  defp validate_type(:number, _val), do: {:error, "must be a number"}
-
-  defp validate_type(:pid, val) when is_pid(val), do: {:ok, val}
-  defp validate_type(:pid, _val), do: {:error, "must be a PID"}
-
-  defp validate_type(:port, val) when is_port(val), do: {:ok, val}
-  defp validate_type(:port, _val), do: {:error, "must be a port"}
-
-  defp validate_type(:struct, %{__struct__: _} = val), do: {:ok, val}
-  defp validate_type(:struct, _val), do: {:error, "must be a struct"}
-
-  defp validate_type({:struct, type1}, %{__struct__: type2} = val) when type1 == type2,
-    do: {:ok, val}
-
-  defp validate_type({:struct, type}, _val),
-    do: {:error, "must be a struct of type #{inspect(type)}"}
-
-  defp validate_type(:timeout, val) when is_integer(val), do: {:ok, val}
-  defp validate_type(:timeout, :infinity = val), do: {:ok, val}
-  defp validate_type(:timeout, _val), do: {:error, "must be a timeout"}
-
-  defp validate_type(:tuple, val) when is_tuple(val), do: {:ok, val}
-  defp validate_type(:tuple, _val), do: {:error, "must be a tuple"}
-
-  defp validate_type({:tuple, size}, val)
-       when is_tuple(val) and is_integer(size) and tuple_size(val) == size,
-       do: {:ok, val}
-
-  defp validate_type({:tuple, size}, _val) when is_integer(size),
-    do: {:error, "must be a tuple of size #{size}"}
-
-  defp validate_type({:tuple, types}, val)
-       when is_tuple(types) and is_tuple(val) and tuple_size(types) == tuple_size(val) do
-    type_list = Tuple.to_list(types)
-    val_list = Tuple.to_list(val)
-    validations = Enum.zip(type_list, val_list)
-
-    Enum.reduce_while(validations, {:ok, {}}, fn {type, val}, {:ok, acc} ->
-      case validate_type(type, val) do
-        {:ok, val} -> {:cont, {:ok, Tuple.append(acc, val)}}
-        {:error, _} -> {:halt, {:error, "must be a tuple with the structure: #{inspect(types)}"}}
-      end
-    end)
+  defp validate_is(:mod_args, {mod, args} = val)
+       when is_atom(mod) and not is_nil(mod) and is_list(args) do
+    if Code.ensure_loaded?(mod) do
+      {:ok, val}
+    else
+      {:error, "must be a module and args"}
+    end
   end
 
-  defp validate_type({:tuple, type}, _val),
-    do: {:error, "must be a tuple with the structure: #{inspect(type)}"}
+  defp validate_is(:mod_args, _val), do: {:error, "must be a module and args"}
 
-  defp validate_type(types, val) when is_list(types) do
+  defp validate_is(:mod_fun, {mod, fun} = val)
+       when is_atom(mod) and not is_nil(mod) and is_atom(fun) and not is_nil(fun) do
+    if Code.ensure_loaded?(mod) do
+      {:ok, val}
+    else
+      {:error, "must be a module and function"}
+    end
+  end
+
+  defp validate_is(:mod_fun, _val), do: {:error, "must be a module and function"}
+
+  defp validate_is(:number, val) when is_number(val), do: {:ok, val}
+  defp validate_is(:number, _val), do: {:error, "must be a number"}
+
+  defp validate_is({:one_of, types}, val) when is_list(types) do
     error = {:error, "must be one of the following: #{inspect(types)}"}
 
     Enum.reduce_while(types, error, fn type, acc ->
-      case validate_type(type, val) do
+      case validate_is(type, val) do
         {:ok, _} = success -> {:halt, success}
         {:error, _} -> {:cont, acc}
       end
     end)
   end
 
-  defp validate_format({key, %{format: %Regex{} = format} = opts, val, errors}) do
-    if val =~ format do
-      {key, opts, val, errors}
-    else
-      {key, opts, val, ["has invalid format" | errors]}
-    end
+  defp validate_is(:pid, val) when is_pid(val), do: {:ok, val}
+  defp validate_is(:pid, _val), do: {:error, "must be a PID"}
+
+  defp validate_is(:port, val) when is_port(val), do: {:ok, val}
+  defp validate_is(:port, _val), do: {:error, "must be a port"}
+
+  defp validate_is(:struct, %{__struct__: _} = val), do: {:ok, val}
+  defp validate_is(:struct, _val), do: {:error, "must be a struct"}
+
+  defp validate_is({:struct, type1}, %{__struct__: type2} = val) when type1 == type2,
+    do: {:ok, val}
+
+  defp validate_is({:struct, type}, _val),
+    do: {:error, "must be a struct of type #{inspect(type)}"}
+
+  defp validate_is(:timeout, val) when is_integer(val), do: {:ok, val}
+  defp validate_is(:timeout, :infinity = val), do: {:ok, val}
+  defp validate_is(:timeout, _val), do: {:error, "must be a timeout"}
+
+  defp validate_is(:tuple, val) when is_tuple(val), do: {:ok, val}
+  defp validate_is(:tuple, _val), do: {:error, "must be a tuple"}
+
+  defp validate_is({:tuple, size}, val)
+       when is_tuple(val) and is_integer(size) and tuple_size(val) == size,
+       do: {:ok, val}
+
+  defp validate_is({:tuple, size}, _val) when is_integer(size),
+    do: {:error, "must be a tuple of size #{size}"}
+
+  defp validate_is({:tuple, types}, val)
+       when is_tuple(types) and is_tuple(val) and tuple_size(types) == tuple_size(val) do
+    type_list = Tuple.to_list(types)
+    val_list = Tuple.to_list(val)
+    validations = Enum.zip(type_list, val_list)
+
+    Enum.reduce_while(validations, {:ok, {}}, fn {type, val}, {:ok, acc} ->
+      case validate_is(type, val) do
+        {:ok, val} -> {:cont, {:ok, Tuple.append(acc, val)}}
+        {:error, _} -> {:halt, {:error, "must be a tuple with the structure: #{inspect(types)}"}}
+      end
+    end)
   end
 
-  defp validate_format(validation) do
-    validation
-  end
-
-  defp validate_inclusion({_, %{inclusion: []}, _, _} = validation) do
-    validation
-  end
-
-  defp validate_inclusion({key, %{inclusion: inclusion} = opts, val, errors}) do
-    if Enum.member?(inclusion, val) do
-      {key, opts, val, errors}
-    else
-      {key, opts, val, ["must be one of: #{inspect(inclusion)}" | errors]}
-    end
-  end
-
-  defp validate_exclusion({_, %{exclusion: []}, _, _} = validation) do
-    validation
-  end
-
-  defp validate_exclusion({key, %{exclusion: exclusion} = opts, val, errors}) do
-    if Enum.member?(exclusion, val) do
-      {key, opts, val, ["must not be one of: #{inspect(exclusion)}" | errors]}
-    else
-      {key, opts, val, errors}
-    end
-  end
+  defp validate_is({:tuple, type}, _val),
+    do: {:error, "must be a tuple with the structure: #{inspect(type)}"}
 
   defp validate_custom({_, %{custom: []}, _, _} = validation) do
     validation
@@ -433,7 +561,7 @@ defmodule KeywordValidator do
     validator.(key, val) ++ errors
   end
 
-  defp to_tagged_tuple({_, valid, []}), do: {:ok, valid}
+  defp to_tagged_tuple({_, valid, []}), do: {:ok, Enum.reverse(valid)}
   defp to_tagged_tuple({_, _, invalid}), do: {:error, invalid}
 
   defp format_invalid(invalid) do
@@ -445,11 +573,7 @@ defmodule KeywordValidator do
   end
 
   defp schema_string(schema) do
-    schema =
-      schema
-      |> Enum.map(fn {k, v} -> "#{k}: #{inspect(v)}" end)
-      |> Enum.join(", ")
-
+    schema = Enum.map_join(schema, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
     "[#{schema}]"
   end
 end
