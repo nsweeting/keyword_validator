@@ -397,8 +397,7 @@ defmodule KeywordValidator do
   defp validate_is(:fun, val) when is_function(val), do: {:ok, val}
   defp validate_is(:fun, _val), do: {:error, "must be a function"}
 
-  defp validate_is({:fun, arity}, val) when is_function(val, arity),
-    do: {:ok, val}
+  defp validate_is({:fun, arity}, val) when is_function(val, arity), do: {:ok, val}
 
   defp validate_is({:fun, arity}, _val),
     do: {:error, "must be a function of arity #{arity}"}
