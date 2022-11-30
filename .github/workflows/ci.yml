@@ -10,14 +10,14 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     name: Elixir ${{ matrix.pair.elixir }} / OTP ${{ matrix.pair.otp }}
     strategy:
       matrix:
         include:
           - pair:
               elixir: "1.9.4"
-              otp: "20.3.8"
+              otp: "20.3"
           - pair:
               elixir: "1.14.0"
               otp: "25.0.2"
