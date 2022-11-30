@@ -361,40 +361,40 @@ defmodule KeywordValidator do
 
   defp validate_is({key, opts, val, errors}) do
     case validate_is(opts.is, val) do
-      {:ok, {_type, val}} -> {key, opts, val, errors}
+      {:ok, val} -> {key, opts, val, errors}
       {:error, msg} -> {key, opts, val, [msg | errors]}
     end
   end
 
-  defp validate_is({:=, val1}, val2) when val1 == val2, do: {:ok, {:=, val2}}
+  defp validate_is({:=, val1}, val2) when val1 == val2, do: {:ok, val2}
   defp validate_is({:=, val}, _val), do: {:error, "must be equal to: #{inspect(val)}"}
 
-  defp validate_is(:any, val), do: {:ok, {:any, val}}
+  defp validate_is(:any, val), do: {:ok, val}
 
-  defp validate_is(:atom, val) when is_atom(val) and not is_nil(val), do: {:ok, {:atom, val}}
+  defp validate_is(:atom, val) when is_atom(val) and not is_nil(val), do: {:ok, val}
   defp validate_is(:atom, _val), do: {:error, "must be an atom"}
 
-  defp validate_is(:binary, val) when is_binary(val), do: {:ok, {:binary, val}}
+  defp validate_is(:binary, val) when is_binary(val), do: {:ok, val}
   defp validate_is(:binary, _val), do: {:error, "must be a binary"}
 
-  defp validate_is(:bitstring, val) when is_bitstring(val), do: {:ok, {:bitstring, val}}
+  defp validate_is(:bitstring, val) when is_bitstring(val), do: {:ok, val}
   defp validate_is(:bitstring, _val), do: {:error, "must be a bitstring"}
 
-  defp validate_is(:boolean, val) when is_boolean(val), do: {:ok, {:boolean, val}}
+  defp validate_is(:boolean, val) when is_boolean(val), do: {:ok, val}
   defp validate_is(:boolean, _val), do: {:error, "must be a boolean"}
 
   defp validate_is({:in, vals}, val) when is_list(vals) do
     if val in vals do
-      {:ok, {:in, val}}
+      {:ok, val}
     else
       {:error, "must be one of: #{inspect(vals)}"}
     end
   end
 
-  defp validate_is(:float, val) when is_float(val), do: {:ok, {:float, val}}
+  defp validate_is(:float, val) when is_float(val), do: {:ok, val}
   defp validate_is(:float, _val), do: {:error, "must be a float"}
 
-  defp validate_is(:fun, val) when is_function(val), do: {:ok, {:fun, val}}
+  defp validate_is(:fun, val) when is_function(val), do: {:ok, val}
   defp validate_is(:fun, _val), do: {:error, "must be a function"}
 
   defp validate_is({:fun, arity}, val) when is_function(val, arity),
@@ -403,11 +403,11 @@ defmodule KeywordValidator do
   defp validate_is({:fun, arity}, _val),
     do: {:error, "must be a function of arity #{arity}"}
 
-  defp validate_is(:integer, val) when is_integer(val), do: {:ok, {:integer, val}}
+  defp validate_is(:integer, val) when is_integer(val), do: {:ok, val}
   defp validate_is(:integer, _val), do: {:error, "must be an integer"}
 
   defp validate_is(:keyword, val) when is_list(val) do
-    Enum.reduce_while(val, {:ok, {:keyword, val}}, fn
+    Enum.reduce_while(val, {:ok, val}, fn
       {key, _}, acc when is_atom(key) -> {:cont, acc}
       _, _ -> {:halt, {:error, "must be a keyword list"}}
     end)
@@ -417,7 +417,7 @@ defmodule KeywordValidator do
 
   defp validate_is({:keyword, schema}, val) when is_list(val) do
     case validate(val, schema) do
-      {:ok, val} -> {:ok, {{:keyword, schema}, val}}
+      {:ok, val} -> {:ok, val}
       {:error, _errors} -> {:error, "must be a keyword with structure: #{schema_string(schema)}"}
     end
   end
@@ -426,13 +426,13 @@ defmodule KeywordValidator do
     {:error, "must be a keyword with structure: #{schema_string(schema)}"}
   end
 
-  defp validate_is(:list, val) when is_list(val), do: {:ok, {:list, val}}
+  defp validate_is(:list, val) when is_list(val), do: {:ok, val}
   defp validate_is(:list, _val), do: {:error, "must be a list"}
 
   defp validate_is({:list, type}, val) when is_list(val) do
-    Enum.reduce_while(val, {:ok, {{:list, type}, []}}, fn item, {:ok, {{:list, type}, vals}} ->
+    Enum.reduce_while(val, {:ok, []}, fn item, {:ok, vals} ->
       case validate_is(type, item) do
-        {:ok, {_, val}} -> {:cont, {:ok, {{:list, type}, vals ++ [val]}}}
+        {:ok, val} -> {:cont, {:ok, vals ++ [val]}}
         {:error, _} -> {:halt, {:error, "must be a list of type #{inspect(type)}"}}
       end
     end)
@@ -440,38 +440,38 @@ defmodule KeywordValidator do
 
   defp validate_is({:list, type}, _val), do: {:error, "must be a list of type #{inspect(type)}"}
 
-  defp validate_is(:map, val) when is_map(val), do: {:ok, {:map, val}}
+  defp validate_is(:map, val) when is_map(val), do: {:ok, val}
   defp validate_is(:map, _val), do: {:error, "must be a map"}
 
   defp validate_is(:mfa, {mod, fun, args} = val)
        when is_atom(mod) and not is_nil(mod) and is_atom(fun) and not is_nil(fun) and
               is_list(args) do
-    {:ok, {:mfa, val}}
+    {:ok, val}
   end
 
   defp validate_is(:mfa, _val), do: {:error, "must be a mfa"}
 
   defp validate_is(:mod, val) when is_atom(val) and not is_nil(val) do
-    {:ok, {:mod, val}}
+    {:ok, val}
   end
 
   defp validate_is(:mod, _val), do: {:error, "must be a module"}
 
   defp validate_is(:mod_args, {mod, args} = val)
        when is_atom(mod) and not is_nil(mod) and is_list(args) do
-    {:ok, {:mod_args, val}}
+    {:ok, val}
   end
 
   defp validate_is(:mod_args, _val), do: {:error, "must be a module and args"}
 
   defp validate_is(:mod_fun, {mod, fun} = val)
        when is_atom(mod) and not is_nil(mod) and is_atom(fun) and not is_nil(fun) do
-    {:ok, {:mod_fun, val}}
+    {:ok, val}
   end
 
   defp validate_is(:mod_fun, _val), do: {:error, "must be a module and function"}
 
-  defp validate_is(:number, val) when is_number(val), do: {:ok, {:number, val}}
+  defp validate_is(:number, val) when is_number(val), do: {:ok, val}
   defp validate_is(:number, _val), do: {:error, "must be a number"}
 
   defp validate_is({:one_of, types}, val) when is_list(types) do
@@ -485,31 +485,31 @@ defmodule KeywordValidator do
     end)
   end
 
-  defp validate_is(:pid, val) when is_pid(val), do: {:ok, {:pid, val}}
+  defp validate_is(:pid, val) when is_pid(val), do: {:ok, val}
   defp validate_is(:pid, _val), do: {:error, "must be a PID"}
 
-  defp validate_is(:port, val) when is_port(val), do: {:ok, {:port, val}}
+  defp validate_is(:port, val) when is_port(val), do: {:ok, val}
   defp validate_is(:port, _val), do: {:error, "must be a port"}
 
-  defp validate_is(:struct, %{__struct__: _} = val), do: {:ok, {:struct, val}}
+  defp validate_is(:struct, %{__struct__: _} = val), do: {:ok, val}
   defp validate_is(:struct, _val), do: {:error, "must be a struct"}
 
   defp validate_is({:struct, type1}, %{__struct__: type2} = val) when type1 == type2,
-    do: {:ok, {{:struct, type1}, val}}
+    do: {:ok, val}
 
   defp validate_is({:struct, type}, _val),
     do: {:error, "must be a struct of type #{inspect(type)}"}
 
-  defp validate_is(:timeout, val) when is_integer(val), do: {:ok, {:timeout, val}}
-  defp validate_is(:timeout, :infinity = val), do: {:ok, {:timeout, val}}
+  defp validate_is(:timeout, val) when is_integer(val), do: {:ok, val}
+  defp validate_is(:timeout, :infinity = val), do: {:ok, val}
   defp validate_is(:timeout, _val), do: {:error, "must be a timeout"}
 
-  defp validate_is(:tuple, val) when is_tuple(val), do: {:ok, {:tuple, val}}
+  defp validate_is(:tuple, val) when is_tuple(val), do: {:ok, val}
   defp validate_is(:tuple, _val), do: {:error, "must be a tuple"}
 
   defp validate_is({:tuple, size}, val)
        when is_tuple(val) and is_integer(size) and tuple_size(val) == size,
-       do: {:ok, {{:tuple, size}, val}}
+       do: {:ok, val}
 
   defp validate_is({:tuple, size}, _val) when is_integer(size),
     do: {:error, "must be a tuple of size #{size}"}
@@ -520,10 +520,10 @@ defmodule KeywordValidator do
     val_list = Tuple.to_list(val)
     validations = Enum.zip(type_list, val_list)
 
-    Enum.reduce_while(validations, {:ok, {{}, {}}}, fn {type, val}, {:ok, {acc_types, acc}} ->
+    Enum.reduce_while(validations, {:ok, {}}, fn {type, val}, {:ok, acc} ->
       case validate_is(type, val) do
-        {:ok, {type, val}} ->
-          {:cont, {:ok, {Tuple.append(acc_types, type), Tuple.append(acc, val)}}}
+        {:ok, val} ->
+          {:cont, {:ok, Tuple.append(acc, val)}}
 
         {:error, _} ->
           {:halt, {:error, "must be a tuple with the structure: #{inspect(types)}"}}
