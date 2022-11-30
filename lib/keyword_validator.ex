@@ -430,9 +430,9 @@ defmodule KeywordValidator do
   defp validate_is(:list, _val), do: {:error, "must be a list"}
 
   defp validate_is({:list, type}, val) when is_list(val) do
-    Enum.reduce_while(val, {:ok, []}, fn item, {:ok, vals} ->
+    Enum.reduce_while(val, {:ok, []}, fn item, {:ok, acc} ->
       case validate_is(type, item) do
-        {:ok, val} -> {:cont, {:ok, vals ++ [val]}}
+        {:ok, val} -> {:cont, {:ok, acc ++ [val]}}
         {:error, _} -> {:halt, {:error, "must be a list of type #{inspect(type)}"}}
       end
     end)
