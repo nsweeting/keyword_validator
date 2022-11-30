@@ -42,9 +42,9 @@ defmodule KeywordValidator do
           | {:list, value_is()}
           | :map
           | :mfa
+          | :mod
           | :mod_args
           | :mod_fun
-          | :module
           | :number
           | {:one_of, [value_is()]}
           | :pid
@@ -140,6 +140,7 @@ defmodule KeywordValidator do
   * `{:in, [value]}` - In the list of values.
   * `:integer` - An integer.
   * `:keyword` - A keyword list.
+  * `{:keyword, schema}` - A keyword with the provided schema.
   * `:list` - A list.
   * `:map` - A map.
   * `:mfa` - A module, function and args.
@@ -443,43 +444,27 @@ defmodule KeywordValidator do
   defp validate_is(:mfa, {mod, fun, args} = val)
        when is_atom(mod) and not is_nil(mod) and is_atom(fun) and not is_nil(fun) and
               is_list(args) do
-    if Code.ensure_loaded?(mod) and function_exported?(mod, fun, length(args)) do
-      {:ok, val}
-    else
-      {:error, "must be a mfa"}
-    end
+    {:ok, val}
   end
 
   defp validate_is(:mfa, _val), do: {:error, "must be a mfa"}
 
   defp validate_is(:mod, val) when is_atom(val) and not is_nil(val) do
-    if Code.ensure_loaded?(val) do
-      {:ok, val}
-    else
-      {:error, "must be a module"}
-    end
+    {:ok, val}
   end
 
   defp validate_is(:mod, _val), do: {:error, "must be a module"}
 
   defp validate_is(:mod_args, {mod, args} = val)
        when is_atom(mod) and not is_nil(mod) and is_list(args) do
-    if Code.ensure_loaded?(mod) do
-      {:ok, val}
-    else
-      {:error, "must be a module and args"}
-    end
+    {:ok, val}
   end
 
   defp validate_is(:mod_args, _val), do: {:error, "must be a module and args"}
 
   defp validate_is(:mod_fun, {mod, fun} = val)
        when is_atom(mod) and not is_nil(mod) and is_atom(fun) and not is_nil(fun) do
-    if Code.ensure_loaded?(mod) do
-      {:ok, val}
-    else
-      {:error, "must be a module and function"}
-    end
+    {:ok, val}
   end
 
   defp validate_is(:mod_fun, _val), do: {:error, "must be a module and function"}

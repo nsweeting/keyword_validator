@@ -1,19 +1,21 @@
 defmodule KeywordValidator.MixProject do
   use Mix.Project
 
-  @version "2.0.0"
+  @version "2.0.1"
 
   def project do
     [
       app: :keyword_validator,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: description(),
       package: package(),
       name: "KeywordValidator",
-      docs: docs()
+      docs: docs(),
+      aliases: aliases(),
+      preferred_cli_env: preferred_cli_env()
     ]
   end
 
@@ -44,6 +46,29 @@ defmodule KeywordValidator.MixProject do
       extras: ["README.md"],
       main: "readme",
       source_url: "https://github.com/nsweeting/keyword_validator"
+    ]
+  end
+
+  defp aliases do
+    [
+      setup: [
+        "local.hex --if-missing --force",
+        "local.rebar --if-missing --force",
+        "deps.get"
+      ],
+      ci: [
+        "setup",
+        "compile --warnings-as-errors",
+        "format --check-formatted",
+        "credo --strict",
+        "test"
+      ]
+    ]
+  end
+
+  defp preferred_cli_env do
+    [
+      ci: :test
     ]
   end
 
