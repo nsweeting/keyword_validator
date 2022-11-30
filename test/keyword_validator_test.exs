@@ -240,7 +240,7 @@ defmodule KeywordValidatorTest do
     end
 
     test "will return errors for module typed keys" do
-      keyword = [foo: __MODULE__, bar: 0, baz: :baz]
+      keyword = [foo: __MODULE__, bar: 0, baz: "baz"]
       schema = [foo: [is: :mod], bar: [is: :mod], baz: [is: :mod]]
 
       assert {:error, invalid} = KeywordValidator.validate(keyword, schema)

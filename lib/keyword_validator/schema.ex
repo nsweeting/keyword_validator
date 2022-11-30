@@ -49,6 +49,7 @@ defmodule KeywordValidator.Schema do
                 :float,
                 :fun,
                 :integer,
+                :keyword,
                 :list,
                 :map,
                 :mfa,
