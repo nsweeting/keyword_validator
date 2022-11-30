@@ -522,11 +522,8 @@ defmodule KeywordValidator do
 
     Enum.reduce_while(validations, {:ok, {}}, fn {type, val}, {:ok, acc} ->
       case validate_is(type, val) do
-        {:ok, val} ->
-          {:cont, {:ok, Tuple.append(acc, val)}}
-
-        {:error, _} ->
-          {:halt, {:error, "must be a tuple with the structure: #{inspect(types)}"}}
+        {:ok, val} -> {:cont, {:ok, Tuple.append(acc, val)}}
+        {:error, _} -> {:halt, {:error, "must be a tuple with the structure: #{inspect(types)}"}}
       end
     end)
   end
