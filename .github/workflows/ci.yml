@@ -17,7 +17,7 @@ jobs:
         include:
           - pair:
               elixir: "1.9.4"
-              otp: "20.3"
+              otp: "20.3.8"
           - pair:
               elixir: "1.14.0"
               otp: "25.0.2"
@@ -30,6 +30,13 @@ jobs:
         with:
           elixir-version: ${{ matrix.pair.elixir }}
           otp-version: ${{ matrix.pair.otp }}
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{matrix.pair.elixir}}-${{matrix.pair.otp}}-${{ hashFiles('**/mix.lock') }}
 
       - name: Run CI
         run: mix ci
