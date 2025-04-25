@@ -11,35 +11,32 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: Elixir ${{ matrix.pair.elixir }} / OTP ${{ matrix.pair.otp }}
+    name: Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }}
     strategy:
       matrix:
         include:
-          - pair:
-              elixir: "1.9"
-              otp: "20.0"
-          - pair:
-              elixir: "1.14"
-              otp: "25.0"
-          - pair:
-              elixir: "1.18"
-              otp: "27.0"
+          - otp: '20'
+            elixir: '1.9'
+          - otp: '25'
+            elixir: '1.14'
+          - otp: '27'
+            elixir: '1.18'
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: ${{ matrix.pair.elixir }}
-          otp-version: ${{ matrix.pair.otp }}
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{matrix.pair.elixir}}-${{matrix.pair.otp}}-${{ hashFiles('**/mix.lock') }}
+          key: ${{ runner.os }}-mix-${{matrix.elixir}}-${{matrix.otp}}-${{ hashFiles('**/mix.lock') }}
 
       - name: Run CI
         run: mix ci
