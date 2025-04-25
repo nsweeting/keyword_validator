@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    runs-on: latest
+    runs-on: ubuntu-latest
     name: Elixir ${{ matrix.pair.elixir }} / OTP ${{ matrix.pair.otp }}
     strategy:
       matrix:
