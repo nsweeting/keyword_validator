@@ -22,8 +22,8 @@ jobs:
               elixir: "1.14"
               otp: "25.0"
           - pair:
-            elixir: "1.18"
-                otp: "27.0"
+              elixir: "1.18"
+              otp: "27.0"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
