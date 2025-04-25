@@ -84,6 +84,15 @@ defmodule KeywordValidatorTest do
       assert_has_error(invalid, :baz, "must be an atom")
     end
 
+    test "will return errors for atom choice typed keys" do
+      keyword = [foo: :foo, bar: :bar]
+      schema = [foo: [is: {:atom, [:foo]}], bar: [is: {:atom, [:foo]}]]
+
+      assert {:error, invalid} = KeywordValidator.validate(keyword, schema)
+      assert_no_error(invalid, :foo)
+      assert_has_error(invalid, :bar, "must be one of: [:foo]")
+    end
+
     test "will return errors for binary typed keys" do
       keyword = [foo: "foo", bar: 0, baz: :baz]
       schema = [foo: [is: :binary], bar: [is: :binary], baz: [is: :binary]]

@@ -10,17 +10,20 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: latest
     name: Elixir ${{ matrix.pair.elixir }} / OTP ${{ matrix.pair.otp }}
     strategy:
       matrix:
         include:
           - pair:
-              elixir: "1.9.4"
-              otp: "20.3"
+              elixir: "1.9"
+              otp: "20.0"
           - pair:
-              elixir: "1.14.0"
-              otp: "25.0.2"
+              elixir: "1.14"
+              otp: "25.0"
+          - pair:
+            elixir: "1.18"
+                otp: "27.0"
     steps:
       - name: Checkout
         uses: actions/checkout@v3

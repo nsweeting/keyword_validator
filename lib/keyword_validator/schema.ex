@@ -63,6 +63,7 @@ defmodule KeywordValidator.Schema do
                 :timeout,
                 :tuple
               ]},
+             {:tuple, {{:=, :atom}, {:list, :atom}}},
              {:tuple, {{:=, :fun}, :integer}},
              {:tuple, {{:=, :keyword}, {:one_of, [:keyword, {:struct, KeywordValidator}]}}},
              {:tuple, {{:=, :list}, {:one_of, [:tuple, :atom]}}},
