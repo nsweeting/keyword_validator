@@ -1,7 +1,7 @@
 defmodule KeywordValidator.MixProject do
   use Mix.Project
 
-  @version "2.0.1"
+  @version "2.1.0"
 
   def project do
     [
@@ -75,8 +75,8 @@ defmodule KeywordValidator.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.27", only: :dev, runtime: false},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false}
+      {:ex_doc, "~> 0.37", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 end

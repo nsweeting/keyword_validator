@@ -28,6 +28,7 @@ defmodule KeywordValidator do
           {:=, any()}
           | :any
           | :atom
+          | {:atom, [atom()]}
           | :binary
           | :bitstring
           | :boolean
@@ -131,6 +132,7 @@ defmodule KeywordValidator do
   * `{:=, value}` - Equal to value.
   * `:any` - Any value.
   * `:atom` - An atom.
+  * `{:atom, [atom]}` - Any of the provided atoms.
   * `:binary` - A binary.
   * `:bitstring` - A bitstring.
   * `:boolean` - A boolean.
@@ -374,6 +376,14 @@ defmodule KeywordValidator do
   defp validate_is(:atom, val) when is_atom(val) and not is_nil(val), do: {:ok, val}
   defp validate_is(:atom, _val), do: {:error, "must be an atom"}
 
+  defp validate_is({:atom, vals}, val) when is_list(vals) do
+    if val in vals do
+      {:ok, val}
+    else
+      {:error, "must be one of: #{inspect(vals)}"}
+    end
+  end
+
   defp validate_is(:binary, val) when is_binary(val), do: {:ok, val}
   defp validate_is(:binary, _val), do: {:error, "must be a binary"}
 
@@ -519,8 +529,10 @@ defmodule KeywordValidator do
     validations = Enum.zip(type_list, val_list)
 
     Enum.reduce_while(validations, {:ok, {}}, fn {type, val}, {:ok, acc} ->
+      idx = tuple_size(acc)
+
       case validate_is(type, val) do
-        {:ok, val} -> {:cont, {:ok, Tuple.append(acc, val)}}
+        {:ok, val} -> {:cont, {:ok, Tuple.insert_at(acc, idx, val)}}
         {:error, _} -> {:halt, {:error, "must be a tuple with the structure: #{inspect(types)}"}}
       end
     end)
